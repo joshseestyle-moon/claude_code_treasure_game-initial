@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Button } from './components/ui/button';
+import AuthForm from './components/AuthForm';
+import Leaderboard from './components/Leaderboard';
 import closedChest from './assets/treasure_closed.png';
 import treasureChest from './assets/treasure_opened.png';
 import skeletonChest from './assets/treasure_opened_skeleton.png';
@@ -14,29 +16,46 @@ interface Box {
   hasTreasure: boolean;
 }
 
+interface User {
+  id: number;
+  username: string;
+  guest?: boolean;
+}
+
 export default function App() {
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [score, setScore] = useState(0);
   const [gameEnded, setGameEnded] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [scoreSaved, setScoreSaved] = useState(false);
 
   const initializeGame = () => {
-    // Randomly assign treasure to one box
     const treasureBoxIndex = Math.floor(Math.random() * 3);
     const newBoxes: Box[] = Array.from({ length: 3 }, (_, index) => ({
       id: index,
       isOpen: false,
       hasTreasure: index === treasureBoxIndex,
     }));
-    
+
     setBoxes(newBoxes);
     setScore(0);
     setGameEnded(false);
+    setScoreSaved(false);
   };
 
-  // Initialize game automatically when component mounts
   useEffect(() => {
     initializeGame();
   }, []);
+
+  useEffect(() => {
+    if (!gameEnded || !user || user.guest || scoreSaved) return;
+    setScoreSaved(true);
+    fetch('/api/scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id, score }),
+    }).catch(() => {});
+  }, [gameEnded, user, scoreSaved, score]);
 
   const openBox = (boxId: number) => {
     if (gameEnded) return;
@@ -67,8 +86,24 @@ export default function App() {
     initializeGame();
   };
 
+  if (!user) {
+    return <AuthForm onAuthSuccess={setUser} />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-amber-100 flex flex-col items-center justify-center p-8">
+      <div className="w-full max-w-2xl flex justify-between items-center mb-4">
+        <span className="text-amber-800 font-medium">👤 {user.username}</span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setUser(null)}
+          className="text-amber-700 border-amber-400 hover:bg-amber-100"
+        >
+          Logout
+        </Button>
+      </div>
+
       <div className="text-center mb-8">
         <h1 className="text-4xl mb-4 text-amber-900">🏴‍☠️ Treasure Hunt Game 🏴‍☠️</h1>
         <p className="text-amber-800 mb-4">
@@ -193,12 +228,20 @@ export default function App() {
                 </p>
               </div>
               
-              <Button 
+              <Button
                 onClick={resetGame}
                 className="text-lg px-8 py-4 bg-amber-600 hover:bg-amber-700 text-white"
               >
                 Play Again
               </Button>
+
+              {user.guest ? (
+                <p className="mt-6 text-amber-700 text-sm">
+                  登入或註冊後可儲存分數並出現在排行榜上！
+                </p>
+              ) : (
+                <Leaderboard />
+              )}
             </motion.div>
           )}
     </div>
